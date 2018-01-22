@@ -50,10 +50,14 @@ constants in an expression by zeroes (they will be optimized away later):
 *}
 
 fun sumN :: "aexp \<Rightarrow> int" where
-(* your definition/proof here *)
+"sumN (N n) = n" |
+"sumN (V x) = 0" |
+"sumN (Plus l r) = sumN l + sumN r"
 
 fun zeroN :: "aexp \<Rightarrow> aexp" where
-(* your definition/proof here *)
+"zeroN (N n) = N 0" |
+"zeroN (V x) = V x" |
+"zeroN (Plus l r) = Plus (zeroN l) (zeroN r)"
 
 text {*
 Next, define a function @{text sepN} that produces an arithmetic expression
@@ -62,10 +66,13 @@ that adds the results of @{const sumN} and @{const zeroN}. Prove that
 *}
 
 definition sepN :: "aexp \<Rightarrow> aexp" where
-(* your definition/proof here *)
+"sepN exp = Plus (zeroN exp)  (N (sumN exp))"
 
 lemma aval_sepN: "aval (sepN t) s = aval t s"
-(* your definition/proof here *)
+  apply(simp add: sepN_def)
+  apply(induction t)
+    apply(auto)
+  done
 
 text {*
 Finally, define a function @{text full_asimp} that uses @{const asimp}
@@ -74,12 +81,10 @@ Prove that it preserves the value of an arithmetic expression.
 *}
 
 definition full_asimp :: "aexp \<Rightarrow> aexp" where
-(* your definition/proof here *)
+"full_asimp exp = asimp (sepN exp)"
 
 lemma aval_full_asimp: "aval (full_asimp t) s = aval t s"
-(* your definition/proof here *)
-
-
+  apply(simp add: full_asimp_def aval_sepN)
 
 text{*
 \endexercise
