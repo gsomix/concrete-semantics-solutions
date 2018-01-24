@@ -85,6 +85,7 @@ definition full_asimp :: "aexp \<Rightarrow> aexp" where
 
 lemma aval_full_asimp: "aval (full_asimp t) s = aval t s"
   apply(simp add: full_asimp_def aval_sepN)
+  done
 
 text{*
 \endexercise
@@ -96,10 +97,12 @@ by an expression in an expression. Define a substitution function
 *}
 
 fun subst :: "vname \<Rightarrow> aexp \<Rightarrow> aexp \<Rightarrow> aexp" where
-(* your definition/proof here *)
+"subst x a (N n) = N n" |
+"subst x a (V y) = (if x = y then a else V y)" |
+"subst x a (Plus l r) = Plus (subst x a l) (subst x a r)"
 
 text{*
-such that @{term "subst x a e"} is the result of replacing
+such that @{term "subst x a e" } is the result of replacing
 every occurrence of variable @{text x} by @{text a} in @{text e}.
 For example:
 @{lemma[display] "subst ''x'' (N 3) (Plus (V ''x'') (V ''y'')) = Plus (N 3) (V ''y'')" by simp}
@@ -109,7 +112,9 @@ substitute first and evaluate afterwards or evaluate with an updated state:
 *}
 
 lemma subst_lemma: "aval (subst x a e) s = aval e (s(x := aval a s))"
-(* your definition/proof here *)
+  apply(induction e)
+    apply(auto)
+  done
 
 text {*
 As a consequence prove that we can substitute equal expressions by equal expressions
@@ -117,7 +122,8 @@ and obtain the same result under evaluation:
 *}
 lemma "aval a1 s = aval a2 s
   \<Longrightarrow> aval (subst x a1 e) s = aval (subst x a2 e) s"
-(* your definition/proof here *)
+  apply(simp add: subst_lemma)
+  done
 
 text{*
 \endexercise
@@ -147,6 +153,29 @@ division by changing the return type of @{text aval2} to
 @{typ "(val \<times> state) option"}. In case of division by 0 let @{text aval2}
 return @{const None}. Division on @{typ int} is the infix @{text div}.
 *}
+
+datatype aexp2 =
+    Const int 
+  | Var vname
+  | PlusOp aexp2 aexp2
+  | IncOp vname
+  | DivOp aexp2 aexp2
+
+fun aval2 :: "aexp2 \<Rightarrow> state \<Rightarrow> (val \<times> state) option" 
+  where
+    "aval2 (Const n) s = Some (n, s)"
+  | "aval2 (Var x) s = Some (s x, s)"
+  | "aval2 (PlusOp l r) s =
+      Option.bind (aval2 l s) (\<lambda> (lval, s\<^sub>1). 
+        Option.bind (aval2 r s\<^sub>1) (\<lambda> (rval, s\<^sub>2).
+          Some (lval + rval, s\<^sub>2)))"
+  | "aval2 (IncOp x) s = Some (s x, s(x := s x + 1))"
+  | "aval2 (DivOp l r) s =
+      Option.bind (aval2 l s) (\<lambda> (lval, s\<^sub>1). 
+        Option.bind (aval2 r s\<^sub>1) (\<lambda> (rval, s\<^sub>2).
+          if rval = 0 then None else Some (lval div rval, s\<^sub>2)))"
+
+value "aval2 (PlusOp (IncOp ''x'') (DivOp (Const 5) (Var ''x''))) (<''x'' := -1>)"
 
 text{*
 \endexercise
