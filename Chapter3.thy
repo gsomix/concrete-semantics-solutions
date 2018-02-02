@@ -186,6 +186,29 @@ The following type adds a @{text LET} construct to arithmetic expressions:
 
 datatype lexp = Nl int | Vl vname | Plusl lexp lexp | LET vname lexp lexp
 
+fun lval :: "lexp \<Rightarrow> state \<Rightarrow> int"
+  where
+    "lval (Nl n) s = n"
+  | "lval (Vl x) s = s x"
+  | "lval (Plusl l r) s = lval l s + lval r s"
+  | "lval (LET x e\<^sub>1 e\<^sub>2) s = lval e\<^sub>2 (s(x := lval e\<^sub>1 s))"
+
+value "lval 
+        (LET ''x'' (Nl 5)
+          (Plusl (Vl ''x'') (Nl 5))) <>"
+
+fun inline :: "lexp \<Rightarrow> aexp"
+  where
+    "inline (Nl n) = N n"
+  | "inline (Vl x) = V x"
+  | "inline (Plusl l r) = Plus (inline l) (inline r)"
+  | "inline (LET x e\<^sub>1 e\<^sub>2) = subst x (inline e\<^sub>1) (inline e\<^sub>2)"
+
+lemma "lval e s = aval (inline e) s"
+  apply(induction e arbitrary: s)
+     apply(auto simp add: subst_lemma)
+  done
+
 text{* The @{const LET} constructor introduces a local variable:
 the value of @{term "LET x e\<^sub>1 e\<^sub>2"} is the value of @{text e\<^sub>2}
 in the state where @{text x} is bound to the value of @{text e\<^sub>1} in the original state.
@@ -204,21 +227,32 @@ Prove that @{const inline} is correct w.r.t.\ evaluation.
 Show that equality and less-or-equal tests on @{text aexp} are definable
 *}
 
-definition Le :: "aexp \<Rightarrow> aexp \<Rightarrow> bexp" where
-(* your definition/proof here *)
+definition Or :: "bexp \<Rightarrow> bexp \<Rightarrow> bexp" where
+"Or e\<^sub>1 e\<^sub>2 = Not (And (Not e\<^sub>1) (Not e\<^sub>2))"
 
 definition Eq :: "aexp \<Rightarrow> aexp \<Rightarrow> bexp" where
-(* your definition/proof here *)
+"Eq e\<^sub>1 e\<^sub>2 = And (Not (Less e\<^sub>1 e\<^sub>2)) (Not (Less e\<^sub>2 e\<^sub>1))"
+
+value "bval (Eq (N 5) (Plus (N 3) (V ''x''))) <''x'' := 2>"
+
+definition Le :: "aexp \<Rightarrow> aexp \<Rightarrow> bexp" where
+"Le e\<^sub>1 e\<^sub>2 = Or (Eq e\<^sub>1 e\<^sub>2) (Less e\<^sub>1 e\<^sub>2)"
+
+value "bval (Le (N 5) (Plus (N 3) (V ''x''))) <''x'' := 3>"
 
 text{*
 and prove that they do what they are supposed to:
 *}
 
-lemma bval_Le: "bval (Le a1 a2) s = (aval a1 s \<le> aval a2 s)"
-(* your definition/proof here *)
-
 lemma bval_Eq: "bval (Eq a1 a2) s = (aval a1 s = aval a2 s)"
-(* your definition/proof here *)
+  apply(simp add: Eq_def)
+  apply(auto)
+  done
+
+lemma bval_Le: "bval (Le a1 a2) s = (aval a1 s \<le> aval a2 s)"
+  apply(simp add: Le_def Eq_def Or_def)
+  apply(auto)
+  done
 
 text{*
 \endexercise
@@ -230,24 +264,51 @@ datatype ifexp = Bc2 bool | If ifexp ifexp ifexp | Less2 aexp aexp
 
 text {*  First define an evaluation function analogously to @{const bval}: *}
 
-fun ifval :: "ifexp \<Rightarrow> state \<Rightarrow> bool" where
-(* your definition/proof here *)
+fun ifval :: "ifexp \<Rightarrow> state \<Rightarrow> bool" 
+  where
+    "ifval (Bc2 b) s = b"
+  | "ifval (If e\<^sub>1 e\<^sub>2 e\<^sub>3) s = 
+      (if ifval e\<^sub>1 s then 
+         ifval e\<^sub>2 s 
+       else 
+         ifval e\<^sub>3 s)"
+  | "ifval (Less2 a\<^sub>1 a\<^sub>2) s = (aval a\<^sub>1 s < aval a\<^sub>2 s)"
 
 text{* Then define two translation functions *}
 
-fun b2ifexp :: "bexp \<Rightarrow> ifexp" where
-(* your definition/proof here *)
+fun b2ifexp :: "bexp \<Rightarrow> ifexp" 
+  where
+    "b2ifexp (Bc b) = Bc2 b"
+  | "b2ifexp (Not e) = (If (b2ifexp e) (Bc2 False) (Bc2 True))"
+  | "b2ifexp (And e\<^sub>1 e\<^sub>2) =
+      (If (b2ifexp e\<^sub>1) 
+        (If (b2ifexp e\<^sub>2) 
+          (Bc2 True) 
+          (Bc2 False)) 
+        (Bc2 False))"
+  | "b2ifexp (Less a\<^sub>1 a\<^sub>2) = Less2 a\<^sub>1 a\<^sub>2"
 
-fun if2bexp :: "ifexp \<Rightarrow> bexp" where
-(* your definition/proof here *)
+(* if a then b else c \<equiv> (a \<and> b) \<or> (\<not>a \<and> c) *)
+fun if2bexp :: "ifexp \<Rightarrow> bexp" 
+  where
+    "if2bexp (Bc2 b) = Bc b"
+  | "if2bexp (If e\<^sub>1 e\<^sub>2 e\<^sub>3) = 
+      (let be\<^sub>1 = if2bexp e\<^sub>1 in
+        Or (And      be\<^sub>1  (if2bexp e\<^sub>2)) 
+           (And (Not be\<^sub>1) (if2bexp e\<^sub>3)))"
+  | "if2bexp (Less2 a\<^sub>1 a\<^sub>2) = Less a\<^sub>1 a\<^sub>2"
 
 text{* and prove their correctness: *}
 
 lemma "bval (if2bexp exp) s = ifval exp s"
-(* your definition/proof here *)
+  apply(induction exp arbitrary: s)
+    apply(auto simp add: Let_def Or_def)
+  done
 
 lemma "ifval (b2ifexp exp) s = bval exp s"
-(* your definition/proof here *)
+  apply(induction exp arbitrary: s)
+     apply(auto)
+  done
 
 text{*
 \endexercise
@@ -270,7 +331,7 @@ fun pbval :: "pbexp \<Rightarrow> (vname \<Rightarrow> bool) \<Rightarrow> bool"
 "pbval (AND b1 b2) s = (pbval b1 s \<and> pbval b2 s)" |
 "pbval (OR b1 b2) s = (pbval b1 s \<or> pbval b2 s)" 
 
-text {* Define a function that checks whether a boolean exression is in NNF
+text {* Define a function that checks whether a boolean expression is in NNF
 (negation normal form), i.e., if @{const NOT} is only applied directly
 to @{const VAR}s: *}
 
