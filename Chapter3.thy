@@ -325,36 +325,53 @@ where variables range over values of type @{typ bool},
 as can be seen from the evaluation function:
 *}
 
-fun pbval :: "pbexp \<Rightarrow> (vname \<Rightarrow> bool) \<Rightarrow> bool" where
-"pbval (VAR x) s = s x"  |
-"pbval (NOT b) s = (\<not> pbval b s)" |
-"pbval (AND b1 b2) s = (pbval b1 s \<and> pbval b2 s)" |
-"pbval (OR b1 b2) s = (pbval b1 s \<or> pbval b2 s)" 
+fun pbval :: "pbexp \<Rightarrow> (vname \<Rightarrow> bool) \<Rightarrow> bool"
+  where
+    "pbval (VAR x) s = s x"  
+  | "pbval (NOT b) s = (\<not> pbval b s)" 
+  | "pbval (AND b1 b2) s = (pbval b1 s \<and> pbval b2 s)" 
+  | "pbval (OR b1 b2) s = (pbval b1 s \<or> pbval b2 s)" 
 
 text {* Define a function that checks whether a boolean expression is in NNF
 (negation normal form), i.e., if @{const NOT} is only applied directly
 to @{const VAR}s: *}
 
-fun is_nnf :: "pbexp \<Rightarrow> bool" where
-(* your definition/proof here *)
+fun is_nnf :: "pbexp \<Rightarrow> bool" 
+  where
+    "is_nnf (VAR x) = True"
+  | "is_nnf (NOT (VAR x)) = True"
+  | "is_nnf (NOT b) = False"
+  | "is_nnf (AND b\<^sub>1 b\<^sub>2) = (is_nnf b\<^sub>1 & is_nnf b\<^sub>2)"
+  | "is_nnf (OR b\<^sub>1 b\<^sub>2) = (is_nnf b\<^sub>1 & is_nnf b\<^sub>2)" 
 
 text{*
 Now define a function that converts a @{text bexp} into NNF by pushing
 @{const NOT} inwards as much as possible:
 *}
 
-fun nnf :: "pbexp \<Rightarrow> pbexp" where
-(* your definition/proof here *)
+fun nnf :: "pbexp \<Rightarrow> pbexp" 
+  where
+    "nnf (VAR x) = VAR x"
+  | "nnf (NOT (AND b\<^sub>1 b\<^sub>2)) = OR (nnf (NOT b\<^sub>1)) (nnf (NOT b\<^sub>2))"
+  | "nnf (NOT (OR b\<^sub>1 b\<^sub>2)) = AND (nnf (NOT b\<^sub>1)) (nnf (NOT b\<^sub>2))"
+  | "nnf (NOT (NOT b)) = nnf b"
+  | "nnf (AND b\<^sub>1 b\<^sub>2) = AND (nnf b\<^sub>1) (nnf b\<^sub>2)"
+  | "nnf (OR b\<^sub>1 b\<^sub>2) = OR (nnf b\<^sub>1) (nnf b\<^sub>2)"
+  | "nnf b = b"
 
 text{*
 Prove that @{const nnf} does what it is supposed to do:
 *}
 
 lemma pbval_nnf: "pbval (nnf b) s = pbval b s"
-(* your definition/proof here *)
+  apply(induction b arbitrary:s rule:nnf.induct)
+    apply(auto)
+  done
 
 lemma is_nnf_nnf: "is_nnf (nnf b)"
-(* your definition/proof here *)
+  apply(induction b rule:nnf.induct)
+    apply(auto)
+  done
 
 text{*
 An expression is in DNF (disjunctive normal form) if it is in NNF
@@ -362,8 +379,20 @@ and if no @{const OR} occurs below an @{const AND}. Define a corresponding
 test:
 *}
 
-fun is_dnf :: "pbexp \<Rightarrow> bool" where
-(* your definition/proof here *)
+fun is_dnf :: "pbexp \<Rightarrow> bool" 
+  where
+    "is_dnf (AND (OR _ _) _) = False"
+  | "is_dnf (AND _ (OR _ _)) = False"
+  | "is_dnf (AND b\<^sub>1 b\<^sub>2) = (is_dnf b\<^sub>1 & is_dnf b\<^sub>2)"
+  | "is_dnf (OR b\<^sub>1 b\<^sub>2) = (is_dnf b\<^sub>1 & is_dnf b\<^sub>2)"
+  | "is_dnf b = is_nnf b"
+
+value "is_dnf (OR (AND (VAR ''A'') (VAR ''B'')) (NOT (VAR ''A'')))"
+value "is_dnf (NOT (OR (VAR ''A'') (VAR ''B'')))"
+value "is_dnf (OR (VAR ''A'') 
+                  (AND (VAR ''B'') 
+                       (OR (VAR ''C'') 
+                           (VAR ''D''))))"
 
 text {*
 An NNF can be converted into a DNF in a bottom-up manner.
@@ -375,31 +404,49 @@ we can express the distributivity step as follows:
 = @{text "OR (AND a\<^sub>1 b\<^sub>1) (AND a\<^sub>1 b\<^sub>2) ... (AND a\<^sub>n b\<^sub>m)"}. Define
 *}
 
-fun dist_AND :: "pbexp \<Rightarrow> pbexp \<Rightarrow> pbexp" where
-(* your definition/proof here *)
+fun dist_AND :: "pbexp \<Rightarrow> pbexp \<Rightarrow> pbexp" 
+  where
+    "dist_AND b (OR c\<^sub>1 c\<^sub>2) = OR (dist_AND b c\<^sub>1) (dist_AND b c\<^sub>2)"
+  | "dist_AND (OR b\<^sub>1 b\<^sub>2) c = OR (dist_AND b\<^sub>1 c) (dist_AND b\<^sub>2 c)"
+  | "dist_AND b c = AND b c"
+
+value "dist_AND (OR (VAR ''A1'') (VAR ''A2''))
+                (OR (VAR ''B1'') (VAR ''B2''))"
+
 
 text {* and prove that it behaves as follows: *}
 
 lemma pbval_dist: "pbval (dist_AND b1 b2) s = pbval (AND b1 b2) s"
-(* your definition/proof here *)
+  apply(induction b1 b2 arbitrary:s rule:dist_AND.induct)
+    apply(auto)
+  done
 
 lemma is_dnf_dist: "is_dnf b1 \<Longrightarrow> is_dnf b2 \<Longrightarrow> is_dnf (dist_AND b1 b2)"
-(* your definition/proof here *)
+  apply(induction b1 b2 rule:dist_AND.induct)
+    apply(auto)
+  done
 
 text {* Use @{const dist_AND} to write a function that converts an NNF
   to a DNF in the above bottom-up manner.
 *}
 
-fun dnf_of_nnf :: "pbexp \<Rightarrow> pbexp" where
-(* your definition/proof here *)
+fun dnf_of_nnf :: "pbexp \<Rightarrow> pbexp"
+  where
+    "dnf_of_nnf (AND b\<^sub>1 b\<^sub>2) = dist_AND (dnf_of_nnf b\<^sub>1) (dnf_of_nnf b\<^sub>2)"
+  | "dnf_of_nnf (OR b\<^sub>1 b\<^sub>2) = OR (dnf_of_nnf b\<^sub>1) (dnf_of_nnf b\<^sub>2)"
+  | "dnf_of_nnf b = b"
 
 text {* Prove the correctness of your function: *}
 
 lemma "pbval (dnf_of_nnf b) s = pbval b s"
-(* your definition/proof here *)
+  apply(induction b arbitrary:s rule:dnf_of_nnf.induct)
+    apply(auto simp add:pbval_dist)
+  done
 
 lemma "is_nnf b \<Longrightarrow> is_dnf (dnf_of_nnf b)"
-(* your definition/proof here *)
+  apply(induction b rule: dnf_of_nnf.induct)
+    apply(auto simp add:is_dnf_dist)
+  done
 
 text{*
 \endexercise
