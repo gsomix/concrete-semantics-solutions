@@ -486,12 +486,24 @@ the result is the new register state: *}
 
 type_synonym rstate = "reg \<Rightarrow> val"
 
-fun exec1 :: "instr \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate" where
-(* your definition/proof here *)
+fun exec1 :: "instr \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate" 
+  where
+    "exec1 (LDI v r) _ rs = rs(r := v)"
+  | "exec1 (LD vn r) s rs = rs(r := s vn)"
+  | "exec1 (ADD r\<^sub>1 r\<^sub>2) _ rs = rs(r\<^sub>1 := rs r\<^sub>1 + rs r\<^sub>2)"
 
 text{*
-Define the execution @{const[source] exec} of a list of instructions as for the stack machine.
+Define the execution @{const[source] exec} of a list of instructions as for the stack machine.*}
 
+fun exec :: "instr list \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate"
+  where
+    "exec [] _ rs = rs"
+  | "exec (x#xs) s rs = exec xs s (exec1 x s rs)"
+
+value "exec [LDI 2 0, LDI 2 1, ADD 0 1] <> <> 0"
+value "exec [LDI 2 0, LD ''x'' 1, ADD 0 1] <''x'' := 3> <> 0"
+
+text{* 
 The compiler takes an arithmetic expression @{text a} and a register @{text r}
 and produces a list of instructions whose execution places the value of @{text a}
 into @{text r}. The registers @{text "> r"} should be used in a stack-like fashion
@@ -499,8 +511,36 @@ for intermediate results, the ones @{text "< r"} should be left alone.
 Define the compiler and prove it correct:
 *}
 
+fun comp :: "aexp \<Rightarrow> reg \<Rightarrow> instr list" 
+  where
+    "comp (N n) r = [LDI n r]"
+  | "comp (V x) r = [LD x r]"
+  | "comp (Plus e\<^sub>1 e\<^sub>2) r = comp e\<^sub>1 r @ comp e\<^sub>2 (r+1) @ [ADD r (r+1)]"
+
+value "comp (Plus (N 2) (N 2)) 0"
+value "comp (Plus (Plus (N 1) (N 2)) (Plus (N 1) (N 0))) 0"
+
+value "exec (comp 
+              (Plus (Plus (N 2) (N 2)) (Plus (N 1) (N 5)))
+              0)
+            <>
+            <>
+            0"
+
+lemma exec_append: "exec (p\<^sub>1 @ p\<^sub>2) s rs = exec p\<^sub>2 s (exec p\<^sub>1 s rs)"
+  apply(induction p\<^sub>1 arbitrary: rs)
+   apply(auto)
+  done
+
+lemma exec_safe: "rn > r \<Longrightarrow> exec (comp a rn) s rs r = rs r"
+  apply(induction a arbitrary: r rn rs)
+    apply(auto simp add: exec_append)
+  done
+
 theorem "exec (comp a r) s rs r = aval a s"
-(* your definition/proof here *)
+  apply(induction a arbitrary: r rs)
+    apply(auto simp add: exec_append exec_safe)
+  done
 
 text{*
 \endexercise
