@@ -560,8 +560,17 @@ adds the value in register @{text r} to the value in register 0;
 @{term "MV0 0"} and @{term "ADD0 0"} are legal. Define the execution functions
 *}
 
-fun exec01 :: "instr0 \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate" where
-(* your definition/proof here *)
+fun exec01 :: "instr0 \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate"
+  where
+    "exec01 (LDI0 n) s rs = rs(0 := n)"
+  | "exec01 (LD0 vn) s rs = rs(0 := s vn)"
+  | "exec01 (MV0 r) s rs = rs(r := rs 0)"
+  | "exec01 (ADD0 r) s rs = rs(0 := rs 0 + rs r)"
+
+fun exec0 :: "instr0 list \<Rightarrow> state \<Rightarrow> rstate \<Rightarrow> rstate"
+  where
+    "exec0 [] s rs = rs"
+  | "exec0 (x#xs) s rs = exec0 xs s (exec01 x s rs)"
 
 text{*
 and @{const exec0} for instruction lists.
@@ -573,8 +582,26 @@ for intermediate results, the ones @{text "\<le> r"} should be left alone
 (with the exception of 0). Define the compiler and prove it correct:
 *}
 
+fun comp0 :: "aexp \<Rightarrow> reg \<Rightarrow> instr0 list"
+  where
+    "comp0 (N n) r = [LDI0 n]"
+  | "comp0 (V x) r = [LD0 x]"
+  | "comp0 (Plus e\<^sub>1 e\<^sub>2) r = comp0 e\<^sub>1 r @ [MV0 (r+1)] @ comp0 e\<^sub>2 (r+1) @ [ADD0 (r+1)]"
+
+lemma comp0_append: "exec0 (p\<^sub>1 @ p\<^sub>2) s rs = exec0 p\<^sub>2 s (exec0 p\<^sub>1 s rs)"
+  apply(induction p\<^sub>1 arbitrary: rs)
+   apply(auto)
+  done
+
+lemma comp0_safe: "\<lbrakk>r \<noteq> 0 \<and> rn \<ge> r\<rbrakk> \<Longrightarrow> exec0 (comp0 a rn) s rs r = rs r"
+  apply(induction a arbitrary: r rn rs)
+    apply(auto simp add: comp0_append)
+  done
+
 theorem "exec0 (comp0 a r) s rs 0 = aval a s"
-(* your definition/proof here *)
+  apply(induction a arbitrary: r rs)
+    apply(auto simp add: comp0_append comp0_safe)
+  done
 
 text{*
 \endexercise
