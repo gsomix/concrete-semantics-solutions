@@ -41,16 +41,25 @@ while maintaining the order of the tree. If the element is already in the tree, 
 same tree should be returned.
 *}
 
-fun ins :: "int \<Rightarrow> int tree \<Rightarrow> int tree"  where
-(* your definition/proof here *)
+fun ins :: "int \<Rightarrow> int tree \<Rightarrow> int tree"  
+  where
+    "ins n Tip = (Node Tip n Tip)"
+  | "ins n (Node l i r) =
+      (if n = i then (Node l i r)
+       else if n < i then (Node (ins n l) i r)
+       else (Node l i (ins n r)))"
 
 text{* Prove correctness of @{const ins}: *}
 
 lemma set_ins: "set(ins x t) = {x} \<union> set t"
-(* your definition/proof here *)
+  apply(induction t arbitrary: x)
+   apply(auto)
+  done
 
 theorem ord_ins: "ord t \<Longrightarrow> ord(ins i t)"
-(* your definition/proof here *)
+  apply(induction t arbitrary: i)
+   apply(auto simp add: set_ins)
+  done
 
 text{*
 \endexercise
